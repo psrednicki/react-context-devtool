@@ -11,7 +11,12 @@
     "build:dev": "npm run build:chrome:dev && npm run build:firefox:dev",
     "start:dev": "cross-env NODE_ENV=development webpack --config build/webpack.config.js --mode development --watch",
     "start:dev:chrome": "npm run build:chrome:dev && cross-env DEV_FOR=chrome npm run start:dev",
-    "start:dev:firefox": "npm run build:firefox:dev && cross-env DEV_FOR=firefox npm run start:dev"
+    "start:dev:firefox": "npm run build:firefox:dev && cross-env DEV_FOR=firefox npm run start:dev",
+    "lint": "eslint src/ extension/ --ext .js",
+    "lint:fix": "eslint src/ extension/ --ext .js --fix",
+    "test:build": "npm run build:dev && echo 'Build test completed successfully'",
+    "package": "npm run build && echo 'Extension packages created in dist/ directory'",
+    "standalone:example": "cd example/standalone && npm install && npm start"
   },
   "dependencies": {
     "@ext-browser/messaging": "^0.0.10",

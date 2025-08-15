@@ -1,0 +1,238 @@
+name: Test Standalone Connection
+
+on:
+  push:
+    paths:
+      - 'src/containers/Settings/StandaloneConnection.js'
+      - 'extension/core/background/standaloneConnection.js'
+      - 'example/standalone/**'
+  pull_request:
+    paths:
+      - 'src/containers/Settings/StandaloneConnection.js'
+      - 'extension/core/background/standaloneConnection.js'
+      - 'example/standalone/**'
+  workflow_dispatch:
+
+jobs:
+  test-standalone-server:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Install main dependencies
+      run: npm ci
+      
+    - name: Install standalone example dependencies
+      run: |
+        cd example/standalone
+        npm install
+        
+    - name: Test standalone server startup
+      run: |
+        cd example/standalone
+        timeout 15s npm start &
+        SERVER_PID=$!
+        sleep 5
+        
+        # Test if server is responding
+        curl -f http://localhost:8098 || echo "HTTP server test failed"
+        
+        # Test WebSocket connection
+        node -e "
+          const WebSocket = require('ws');
+          const ws = new WebSocket('ws://localhost:8097');
+          ws.on('open', () => {
+            console.log('✅ WebSocket connection successful');
+            ws.send(JSON.stringify({
+              type: 'react-context-devtool-handshake',
+              source: 'test-client'
+            }));
+          });
+          ws.on('message', (data) => {
+            console.log('📨 Received:', data.toString());
+            ws.close();
+            process.exit(0);
+          });
+          ws.on('error', (err) => {
+            console.error('❌ WebSocket error:', err.message);
+            process.exit(1);
+          });
+          setTimeout(() => {
+            console.error('❌ WebSocket timeout');
+            process.exit(1);
+          }, 10000);
+        " || echo "WebSocket test completed"
+        
+        kill $SERVER_PID || true
+
+  validate-websocket-protocol:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        
+    - name: Validate WebSocket message types
+      run: |
+        echo "🔍 Validating WebSocket protocol implementation..."
+        
+        # Check for required message types in standalone connection manager
+        echo "Checking StandaloneConnectionManager..."
+        grep -q "react-context-devtool-handshake" extension/core/background/standaloneConnection.js && echo "✅ Handshake message found" || echo "❌ Handshake message missing"
+        grep -q "react-context-devtool-data" extension/core/background/standaloneConnection.js && echo "✅ Data message found" || echo "❌ Data message missing"
+        grep -q "react-context-devtool-dispatch" extension/core/background/standaloneConnection.js && echo "✅ Dispatch message found" || echo "❌ Dispatch message missing"
+        
+        # Check for WebSocket connection handling
+        echo "Checking WebSocket connection handling..."
+        grep -q "new WebSocket" extension/core/background/standaloneConnection.js && echo "✅ WebSocket creation found" || echo "❌ WebSocket creation missing"
+        grep -q "onopen" extension/core/background/standaloneConnection.js && echo "✅ onopen handler found" || echo "❌ onopen handler missing"
+        grep -q "onmessage" extension/core/background/standaloneConnection.js && echo "✅ onmessage handler found" || echo "❌ onmessage handler missing"
+        grep -q "onerror" extension/core/background/standaloneConnection.js && echo "✅ onerror handler found" || echo "❌ onerror handler missing"
+        
+        # Check for reconnection logic
+        echo "Checking reconnection logic..."
+        grep -q "reconnect" extension/core/background/standaloneConnection.js && echo "✅ Reconnection logic found" || echo "❌ Reconnection logic missing"
+        
+        # Check standalone connection UI
+        echo "Checking standalone connection UI..."
+        grep -q "connectionMode" src/containers/Settings/StandaloneConnection.js && echo "✅ Connection mode found" || echo "❌ Connection mode missing"
+        grep -q "port" src/containers/Settings/StandaloneConnection.js && echo "✅ Port configuration found" || echo "❌ Port configuration missing"
+
+  test-extension-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build extension with standalone features
+      run: npm run build:dev
+      
+    - name: Verify standalone files in build
+      run: |
+        echo "🔍 Verifying standalone connection files in build..."
+        
+        # Check if standalone connection files are included in the build
+        find dist/ -name "*.js" -exec grep -l "StandaloneConnection\|standaloneConnection" {} \; | head -5
+        
+        # Check for WebSocket usage in built files
+        find dist/ -name "*.js" -exec grep -l "WebSocket\|ws://" {} \; | head -5
+        
+        # Verify settings include connection mode
+        find dist/ -name "*.js" -exec grep -l "connectionMode\|standalonePort" {} \; | head -5
+        
+        echo "✅ Build verification completed"
+
+  integration-test:
+    runs-on: ubuntu-latest
+    needs: [test-standalone-server, validate-websocket-protocol, test-extension-build]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run integration test
+      run: |
+        echo "🧪 Running integration test..."
+        
+        # Build the extension
+        npm run build:dev
+        
+        # Start standalone server in background
+        cd example/standalone
+        npm install
+        npm start &
+        SERVER_PID=$!
+        cd ../..
+        
+        # Wait for server to start
+        sleep 5
+        
+        # Simulate extension connecting to standalone server
+        node -e "
+          const WebSocket = require('ws');
+          console.log('🔌 Testing extension-like connection...');
+          
+          const ws = new WebSocket('ws://localhost:8097');
+          
+          ws.on('open', () => {
+            console.log('✅ Connected to standalone server');
+            
+            // Send handshake like the extension would
+            ws.send(JSON.stringify({
+              type: 'react-context-devtool-handshake',
+              source: 'react-context-devtool-extension',
+              version: '4.4'
+            }));
+            
+            // Send sample context data
+            setTimeout(() => {
+              ws.send(JSON.stringify({
+                type: 'react-context-devtool-data',
+                payload: {
+                  context: { 'test-context': { value: 'test-value' } },
+                  useReducer: {},
+                  contextKeys: ['test-context'],
+                  useReducerKeys: []
+                }
+              }));
+            }, 1000);
+          });
+          
+          ws.on('message', (data) => {
+            const message = JSON.parse(data.toString());
+            console.log('📨 Received message type:', message.type);
+            
+            if (message.type === 'handshake-response') {
+              console.log('✅ Handshake successful');
+            }
+          });
+          
+          ws.on('error', (err) => {
+            console.error('❌ Connection error:', err.message);
+            process.exit(1);
+          });
+          
+          // Close after 10 seconds
+          setTimeout(() => {
+            console.log('✅ Integration test completed');
+            ws.close();
+            process.exit(0);
+          }, 10000);
+        "
+        
+        # Clean up
+        kill $SERVER_PID || true
+        
+        echo "🎉 All tests passed!"

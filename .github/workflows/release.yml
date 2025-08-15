@@ -1,0 +1,213 @@
+name: Release Extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v4.5.0)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      release_id: ${{ steps.create_release.outputs.id }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Get version from tag or input
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        else
+          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        fi
+        
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.get_version.outputs.version }}
+        release_name: React Context DevTool ${{ steps.get_version.outputs.version }}
+        body: |
+          ## 🚀 React Context DevTool ${{ steps.get_version.outputs.version }}
+          
+          ### ✨ New Features
+          - **Standalone Connection**: Connect to React DevTools via WebSocket (port-based)
+          - **Remote Debugging**: Debug React apps running on different environments
+          - **Enhanced Settings**: Improved UI for connection management
+          
+          ### 🔧 Improvements
+          - Better WebSocket protocol handling
+          - Automatic reconnection with retry logic
+          - Support for React Native debugging
+          
+          ### 📦 Installation
+          
+          **Browser Extensions:**
+          - Chrome: Download `ReactContextDevtool_chrome.zip`
+          - Firefox: Download `ReactContextDevtool_firefox.zip`
+          
+          **Standalone Connection:**
+          1. Start React DevTools: `npx react-devtools --port=8097`
+          2. Open extension settings
+          3. Select "Standalone Connection"
+          4. Set port to 8097 and click "Connect"
+          
+          ### 🐛 Bug Fixes
+          - Fixed context data serialization issues
+          - Improved error handling for WebSocket connections
+          - Better support for React 18+ features
+          
+          ---
+          
+          **Full Changelog**: https://github.com/${{ github.repository }}/compare/v4.4...${{ steps.get_version.outputs.version }}
+        draft: false
+        prerelease: ${{ github.event.inputs.prerelease || false }}
+
+  build-and-upload:
+    needs: create-release
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        browser: [chrome, firefox]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Build production extension for ${{ matrix.browser }}
+      run: npm run build:${{ matrix.browser }}
+      
+    - name: Get built zip file
+      id: get_zip
+      run: |
+        ZIP_FILE=$(find dist/${{ matrix.browser }}/ -name "*.zip" | head -1)
+        ZIP_NAME=$(basename "$ZIP_FILE")
+        echo "zip_file=$ZIP_FILE" >> $GITHUB_OUTPUT
+        echo "zip_name=ReactContextDevtool_${{ matrix.browser }}.zip" >> $GITHUB_OUTPUT
+        
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ${{ steps.get_zip.outputs.zip_file }}
+        asset_name: ${{ steps.get_zip.outputs.zip_name }}
+        asset_content_type: application/zip
+
+  build-standalone-example:
+    needs: create-release
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Create standalone example package
+      run: |
+        mkdir -p standalone-example
+        cp -r example/standalone/* standalone-example/
+        cd standalone-example
+        npm install --production
+        cd ..
+        tar -czf standalone-example.tar.gz standalone-example/
+        
+    - name: Upload Standalone Example
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: ./standalone-example.tar.gz
+        asset_name: react-context-devtool-standalone-example.tar.gz
+        asset_content_type: application/gzip
+
+  update-stores:
+    needs: [create-release, build-and-upload]
+    runs-on: ubuntu-latest
+    if: ${{ !github.event.inputs.prerelease }}
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Notify about store updates
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { owner, repo } = context.repo;
+          const releaseId = '${{ needs.create-release.outputs.release_id }}';
+          
+          await github.rest.issues.create({
+            owner,
+            repo,
+            title: '🏪 Update Browser Extension Stores',
+            body: `## Store Update Required
+            
+            A new release has been created and built successfully.
+            
+            **Release:** ${{ steps.get_version.outputs.version }}
+            **Release ID:** ${releaseId}
+            
+            ### Manual Steps Required:
+            
+            #### Chrome Web Store
+            1. Download \`ReactContextDevtool_chrome.zip\` from the release
+            2. Go to [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole)
+            3. Upload the new version
+            4. Update store listing if needed
+            
+            #### Firefox Add-ons Store
+            1. Download \`ReactContextDevtool_firefox.zip\` from the release
+            2. Go to [Firefox Developer Hub](https://addons.mozilla.org/developers/)
+            3. Upload the new version
+            4. Update store listing if needed
+            
+            #### Microsoft Edge Add-ons Store
+            1. Use the Chrome zip file
+            2. Go to [Microsoft Partner Center](https://partner.microsoft.com/dashboard)
+            3. Upload the new version
+            
+            ### Checklist
+            - [ ] Chrome Web Store updated
+            - [ ] Firefox Add-ons updated  
+            - [ ] Microsoft Edge Add-ons updated
+            - [ ] Release notes reviewed
+            - [ ] Documentation updated
+            
+            This issue can be closed once all stores are updated.`,
+            labels: ['release', 'store-update', 'manual-task']
+          });

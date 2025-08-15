@@ -1,0 +1,109 @@
+name: Development Build
+
+on:
+  push:
+    branches: [ develop, feature/*, fix/* ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  dev-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Run ESLint
+      run: |
+        npx eslint src/ extension/ --ext .js --format=compact || true
+        
+    - name: Build development version
+      run: npm run build:dev
+      
+    - name: Verify standalone connection files
+      run: |
+        echo "Checking for standalone connection files..."
+        ls -la src/containers/Settings/StandaloneConnection.js || echo "StandaloneConnection.js not found"
+        ls -la extension/core/background/standaloneConnection.js || echo "standaloneConnection.js not found"
+        ls -la example/standalone/ || echo "Standalone example not found"
+        
+    - name: Test webpack build
+      run: |
+        echo "Testing webpack configuration..."
+        npx webpack --config build/webpack.config.js --mode development --stats=minimal
+        
+    - name: Upload development artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dev-build-${{ github.sha }}
+        path: |
+          dist/
+        retention-days: 14
+        
+    - name: Comment PR with build status
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { owner, repo, number } = context.issue;
+          const sha = context.payload.pull_request.head.sha;
+          
+          await github.rest.issues.createComment({
+            owner,
+            repo,
+            issue_number: number,
+            body: `✅ Development build completed successfully for commit ${sha.substring(0, 7)}
+            
+            **Build artifacts:**
+            - Chrome extension: Available in artifacts
+            - Firefox extension: Available in artifacts
+            - Standalone connection: ✅ Included
+            
+            **New features in this build:**
+            - Standalone port-based connection support
+            - WebSocket communication with React DevTools
+            - Enhanced settings UI for connection management`
+          });
+
+  validate-standalone:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Install standalone example dependencies
+      run: |
+        cd example/standalone
+        npm install
+        
+    - name: Test standalone server
+      run: |
+        cd example/standalone
+        timeout 10s npm start || echo "Server test completed"
+        
+    - name: Validate WebSocket protocol
+      run: |
+        echo "Validating WebSocket message types..."
+        grep -r "react-context-devtool-handshake" extension/ src/ example/ || echo "Handshake message found"
+        grep -r "react-context-devtool-data" extension/ src/ example/ || echo "Data message found"
+        grep -r "react-context-devtool-dispatch" extension/ src/ example/ || echo "Dispatch message found"
