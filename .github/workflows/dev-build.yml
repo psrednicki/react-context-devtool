@@ -43,6 +43,7 @@ jobs:
         ls -la src/containers/Settings/StandaloneConnection.js || echo "StandaloneConnection.js not found"
         ls -la extension/core/background/standaloneConnection.js || echo "standaloneConnection.js not found"
         ls -la example/standalone/ || echo "Standalone example not found"
+        ls -la electron/ || echo "Electron app not found"
         
     - name: Test webpack build
       run: |
@@ -121,3 +122,57 @@ jobs:
         grep -r "react-context-devtool-handshake" extension/ src/ example/ || echo "Handshake message found"
         grep -r "react-context-devtool-data" extension/ src/ example/ || echo "Data message found"
         grep -r "react-context-devtool-dispatch" extension/ src/ example/ || echo "Dispatch message found"
+
+  test-electron-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        
+    - name: Cache node modules
+      uses: actions/cache@v3
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+        
+    - name: Install main dependencies
+      run: npm install
+      
+    - name: Install Electron dependencies
+      run: |
+        cd electron
+        npm install
+        
+    - name: Test Electron renderer build
+      run: |
+        cd electron
+        npm run build:renderer
+        
+    - name: Verify Electron build outputs
+      run: |
+        echo "Checking Electron build outputs..."
+        ls -la electron/build/ || echo "Electron build directory not found"
+        ls -la electron/build/index.html || echo "Electron HTML not found"
+        ls -la electron/build/bundle.js || echo "Electron bundle not found"
+        
+    - name: Test Electron package (Linux only)
+      run: |
+        cd electron
+        npm run pack
+        
+    - name: Upload Electron test artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: electron-test-build
+        path: |
+          electron/build/
+          electron/dist/
+        retention-days: 7

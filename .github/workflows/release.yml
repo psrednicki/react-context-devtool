@@ -48,26 +48,40 @@ jobs:
           ## 🚀 React Context DevTool ${{ steps.get_version.outputs.version }}
           
           ### ✨ New Features
+          - **Electron Standalone App**: Desktop application for debugging React Context
           - **Standalone Connection**: Connect to React DevTools via WebSocket (port-based)
           - **Remote Debugging**: Debug React apps running on different environments
           - **Enhanced Settings**: Improved UI for connection management
+          - **Cross-Platform**: Windows, macOS, and Linux support
           
           ### 🔧 Improvements
           - Better WebSocket protocol handling
           - Automatic reconnection with retry logic
           - Support for React Native debugging
+          - Professional desktop application interface
           
           ### 📦 Installation
+          
+          **Desktop Applications:**
+          - Windows: Download `ReactContextDevTool-Windows.exe`
+          - macOS: Download `ReactContextDevTool-macOS.dmg`
+          - Linux: Download `ReactContextDevTool-Linux.AppImage`
           
           **Browser Extensions:**
           - Chrome: Download `ReactContextDevtool_chrome.zip`
           - Firefox: Download `ReactContextDevtool_firefox.zip`
           
           **Standalone Connection:**
-          1. Start React DevTools: `npx react-devtools --port=8097`
-          2. Open extension settings
-          3. Select "Standalone Connection"
-          4. Set port to 8097 and click "Connect"
+          1. **Desktop App**: Launch the Electron app and choose connection mode
+          2. **Browser Extension**: Open settings → "Standalone Connection" → Set port → Connect
+          3. **Direct Integration**: Add WebSocket connection code to your React app
+          
+          ### 🖥️ Desktop App Features
+          - Built-in WebSocket server or connect to existing servers
+          - Professional debugging interface
+          - Real-time Context and useReducer visualization
+          - Action dispatching and state diffing
+          - Cross-platform native application
           
           ### 🐛 Bug Fixes
           - Fixed context data serialization issues
@@ -129,6 +143,87 @@ jobs:
         asset_name: ${{ steps.get_zip.outputs.zip_name }}
         asset_content_type: application/zip
 
+  build-electron-releases:
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            ext: AppImage
+          - os: windows-latest
+            platform: win
+            ext: exe
+          - os: macos-latest
+            platform: mac
+            ext: dmg
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        
+    - name: Cache node modules
+      uses: actions/cache@v3
+      with:
+        path: ~/.npm
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+        
+    - name: Install main dependencies
+      run: npm install
+      
+    - name: Install Electron dependencies
+      run: |
+        cd electron
+        npm install
+        
+    - name: Build Electron renderer
+      run: |
+        cd electron
+        npm run build:renderer
+        
+    - name: Build Electron app
+      run: |
+        cd electron
+        npm run dist -- --${{ matrix.platform }}
+        
+    - name: Find built files
+      id: find_files
+      shell: bash
+      run: |
+        cd electron/dist
+        if [ "${{ matrix.platform }}" = "linux" ]; then
+          FILE=$(find . -name "*.AppImage" | head -1)
+          ASSET_NAME="ReactContextDevTool-Linux.AppImage"
+        elif [ "${{ matrix.platform }}" = "win" ]; then
+          FILE=$(find . -name "*.exe" | head -1)
+          ASSET_NAME="ReactContextDevTool-Windows.exe"
+        elif [ "${{ matrix.platform }}" = "mac" ]; then
+          FILE=$(find . -name "*.dmg" | head -1)
+          ASSET_NAME="ReactContextDevTool-macOS.dmg"
+        fi
+        echo "file_path=$FILE" >> $GITHUB_OUTPUT
+        echo "asset_name=$ASSET_NAME" >> $GITHUB_OUTPUT
+        
+    - name: Upload Electron Release Asset
+      if: steps.find_files.outputs.file_path != ''
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: electron/dist/${{ steps.find_files.outputs.file_path }}
+        asset_name: ${{ steps.find_files.outputs.asset_name }}
+        asset_content_type: application/octet-stream
+
   build-standalone-example:
     needs: create-release
     runs-on: ubuntu-latest
@@ -170,7 +265,7 @@ jobs:
         asset_content_type: application/gzip
 
   update-stores:
-    needs: [create-release, build-and-upload]
+    needs: [create-release, build-and-upload, build-electron-releases]
     runs-on: ubuntu-latest
     if: ${{ !github.event.inputs.prerelease }}
     
