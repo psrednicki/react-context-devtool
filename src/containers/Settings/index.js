@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 
 import Button from "Components/Button";
+import StandaloneConnection from "./StandaloneConnection";
 
 import "./index.scss";
 
@@ -62,6 +63,7 @@ const Settings = () => {
 
   return (
     <div className="settings-wrapper">
+      <StandaloneConnection />
       <div className="setting-section">
         <div className="setting-section-label">Start Debugging</div>
         <div className="setting-section-value">

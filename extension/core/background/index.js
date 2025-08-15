@@ -7,11 +7,15 @@ import {
 import { activateExtension, getSettings, getCurrentTab } from "./utils";
 import { executeScriptInMainWorld } from "./executeScript";
 import { saveCatchData, removeCatchData } from "./contextData";
+import StandaloneConnectionManager from "./standaloneConnection";
 
 const enableTabMap = {
   popup: false,
   devtool: {},
 };
+
+// Initialize standalone connection manager
+const standaloneManager = new StandaloneConnectionManager();
 
 initMessaging({
   onPortDisconnect: async ({ portName, tabId }) => {
@@ -120,4 +124,29 @@ onMessage("REACT_JS_FOUND", async (data, { sender }) => {
 onMessage("CONTEXT_DATA_UPDATED", (data, { sender }) => {
   // console.log("CONTEXT_DATA_UPDATED", data);
   saveCatchData(sender.tab, data);
+  
+  // Forward to standalone connection if connected
+  if (standaloneManager.getConnectionStatus().isConnected) {
+    standaloneManager.sendContextData(data);
+  }
+});
+
+// Standalone connection message handlers
+onMessage("CONNECT_STANDALONE", async (data) => {
+  const { port } = data;
+  await standaloneManager.connect(port);
+  return standaloneManager.getConnectionStatus();
+});
+
+onMessage("DISCONNECT_STANDALONE", () => {
+  standaloneManager.disconnect();
+  return standaloneManager.getConnectionStatus();
+});
+
+onMessage("GET_STANDALONE_STATUS", () => {
+  return standaloneManager.getConnectionStatus();
+});
+
+onMessage("STANDALONE_DISPATCH_ACTION", (data) => {
+  standaloneManager.sendDispatchAction(data);
 });

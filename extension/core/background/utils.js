@@ -21,11 +21,13 @@ export const getSettings = () => {
     // startDebugWhenV2: "pageLoad",
     debugUseReducer: true,
     debugContext: true,
+    connectionMode: "extension",
+    standalonePort: "8097",
   };
 
   return new Promise((resolve) => {
     chrome.storage.local.get(
-      ["startDebugWhenV2", "debugUseReducer", "debugContext"],
+      ["startDebugWhenV2", "debugUseReducer", "debugContext", "connectionMode", "standalonePort"],
       (settings) => {
         const settingsToUse = {
           ...defaultSettings,

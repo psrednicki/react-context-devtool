@@ -1,0 +1,24 @@
+{
+  "name": "react-context-devtool-standalone-example",
+  "version": "1.0.0",
+  "description": "Example of using React Context DevTool with standalone connection",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "ws": "^8.14.2",
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "react",
+    "context",
+    "devtools",
+    "standalone",
+    "websocket"
+  ]
+}
