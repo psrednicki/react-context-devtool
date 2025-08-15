@@ -16,7 +16,12 @@
     "lint:fix": "eslint src/ extension/ --ext .js --fix",
     "test:build": "npm run build:dev && echo 'Build test completed successfully'",
     "package": "npm run build && echo 'Extension packages created in dist/ directory'",
-    "standalone:example": "cd example/standalone && npm install && npm start"
+    "standalone:example": "cd example/standalone && npm install && npm start",
+    "electron:install": "cd electron && npm install",
+    "electron:dev": "cd electron && npm run dev",
+    "electron:build": "cd electron && npm run build",
+    "electron:dist": "cd electron && npm run dist",
+    "electron:start": "cd electron && npm start"
   },
   "dependencies": {
     "@ext-browser/messaging": "^0.0.10",

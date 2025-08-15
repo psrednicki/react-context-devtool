@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+  <title>React Context DevTool</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+        sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background-color: #f5f5f5;
+    }
+
+    #root {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .titlebar-drag-region {
+      -webkit-app-region: drag;
+      height: 30px;
+      background: linear-gradient(to bottom, #f0f0f0, #e0e0e0);
+      border-bottom: 1px solid #ccc;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      color: #333;
+      user-select: none;
+    }
+
+    .titlebar-no-drag {
+      -webkit-app-region: no-drag;
+    }
+
+    .loading-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 3px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 1s ease-in-out infinite;
+      margin-bottom: 20px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .app-icon {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 20px;
+      background: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiM2MTc2ZmYiLz4KPHN2ZyB4PSIxNiIgeT0iMTYiIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+CjxwYXRoIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyem0tMiAxNWwtNS01IDEuNDEtMS40MUwxMCAxNC4xN2w3LjU5LTcuNTlMMTkgOGwtOSA5eiIvPgo8L3N2Zz4KPC9zdmc+') no-repeat center;
+      background-size: contain;
+    }
+
+    .error-message {
+      background: #ff4757;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 4px;
+      margin: 10px;
+      text-align: center;
+    }
+
+    .success-message {
+      background: #2ed573;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 4px;
+      margin: 10px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="loading-screen">
+      <div class="app-icon"></div>
+      <div class="loading-spinner"></div>
+      <h2>React Context DevTool</h2>
+      <p>Starting standalone application...</p>
+    </div>
+  </div>
+
+  <script>
+    // Basic error handling
+    window.addEventListener('error', (event) => {
+      console.error('Application error:', event.error);
+      const root = document.getElementById('root');
+      root.innerHTML = `
+        <div class="loading-screen">
+          <div class="app-icon"></div>
+          <h2>Application Error</h2>
+          <div class="error-message">
+            ${event.error.message || 'An unexpected error occurred'}
+          </div>
+          <p>Please restart the application</p>
+        </div>
+      `;
+    });
+
+    // Show loading state
+    window.addEventListener('DOMContentLoaded', () => {
+      console.log('React Context DevTool Electron app loading...');
+    });
+  </script>
+</body>
+</html>
