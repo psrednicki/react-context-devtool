@@ -45,15 +45,48 @@ const StandaloneConnection = () => {
         port: parseInt(port)
       });
       
-      if (response.isConnected) {
+      if (response && response.connecting) {
+        setConnectionStatus("Connecting to WebSocket...");
+        
+        // Poll for connection status
+        const checkConnection = setInterval(async () => {
+          try {
+            const status = await chrome.runtime.sendMessage({
+              type: "GET_STANDALONE_STATUS"
+            });
+            
+            if (status.isConnected) {
+              setIsConnected(true);
+              setConnectionStatus("Connected");
+              clearInterval(checkConnection);
+            } else if (status.error) {
+              setIsConnected(false);
+              setConnectionStatus(`Connection failed: ${status.error}`);
+              clearInterval(checkConnection);
+            }
+          } catch (err) {
+            console.error("Error checking connection status:", err);
+            clearInterval(checkConnection);
+          }
+        }, 1000);
+        
+        // Stop polling after 10 seconds
+        setTimeout(() => {
+          clearInterval(checkConnection);
+          if (!isConnected) {
+            setConnectionStatus("Connection timeout");
+          }
+        }, 10000);
+        
+      } else if (response && response.isConnected) {
         setIsConnected(true);
         setConnectionStatus("Connected");
       } else {
         setIsConnected(false);
-        setConnectionStatus("Connection failed");
+        setConnectionStatus(response?.error || "Connection failed");
       }
     } catch (error) {
-      setConnectionStatus("Connection failed");
+      setConnectionStatus(`Connection failed: ${error.message}`);
       console.error("Failed to connect to standalone:", error);
     }
   };

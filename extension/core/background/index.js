@@ -150,3 +150,14 @@ onMessage("GET_STANDALONE_STATUS", () => {
 onMessage("STANDALONE_DISPATCH_ACTION", (data) => {
   standaloneManager.sendDispatchAction(data);
 });
+
+// Handle connection status updates from content script
+onMessage("CONNECTION_STATUS", (data) => {
+  standaloneManager.updateConnectionStatus(data);
+});
+
+onMessage("STANDALONE_DATA_RECEIVED", (data) => {
+  // Handle data received from standalone React DevTools
+  console.log("Received data from standalone:", data);
+  // Forward to devtools panel if needed
+});

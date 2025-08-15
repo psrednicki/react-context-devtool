@@ -2,88 +2,66 @@ import { sendMessage } from "@ext-browser/messaging/background";
 
 class StandaloneConnectionManager {
   constructor() {
-    this.websocket = null;
     this.isConnected = false;
     this.port = 8097;
-    this.reconnectAttempts = 0;
-    this.maxReconnectAttempts = 5;
-    this.reconnectDelay = 2000;
+    this.currentTabId = null;
   }
 
   async connect(port = 8097) {
     this.port = port;
     
-    if (this.websocket) {
-      this.websocket.close();
-    }
-
     try {
-      this.websocket = new WebSocket(`ws://localhost:${port}`);
+      // Get current active tab
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tabs.length === 0) {
+        throw new Error("No active tab found");
+      }
       
-      this.websocket.onopen = () => {
-        console.log("Connected to standalone React DevTools");
-        this.isConnected = true;
-        this.reconnectAttempts = 0;
-        
-        // Send handshake
-        this.send({
-          type: "react-context-devtool-handshake",
-          source: "react-context-devtool-extension",
-          version: chrome.runtime.getManifest().version
-        });
-      };
-
-      this.websocket.onclose = (event) => {
-        console.log("Disconnected from standalone React DevTools");
-        this.isConnected = false;
-        this.websocket = null;
-        
-        // Attempt to reconnect if it wasn't a manual disconnect
-        if (event.code !== 1000 && this.reconnectAttempts < this.maxReconnectAttempts) {
-          setTimeout(() => {
-            this.reconnectAttempts++;
-            console.log(`Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`);
-            this.connect(this.port);
-          }, this.reconnectDelay);
-        }
-      };
-
-      this.websocket.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        this.isConnected = false;
-      };
-
-      this.websocket.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          this.handleMessage(data);
-        } catch (err) {
-          console.error("Error parsing WebSocket message:", err);
-        }
-      };
-
+      this.currentTabId = tabs[0].id;
+      console.log(`Connecting to standalone React DevTools on port ${port} via tab ${this.currentTabId}`);
+      
+      // Send connection request to content script
+      await sendMessage(`content:${this.currentTabId}`, "STANDALONE_CONNECT", { port });
+      
+      // Connection status will be updated via message from content script
+      return { isConnected: false, connecting: true, port };
+      
     } catch (error) {
-      console.error("Failed to create WebSocket connection:", error);
+      console.error("Failed to initiate connection:", error);
       this.isConnected = false;
+      return { isConnected: false, error: error.message, port };
     }
   }
 
-  disconnect() {
-    if (this.websocket) {
-      this.websocket.close(1000); // Normal closure
-      this.websocket = null;
-      this.isConnected = false;
-    }
-  }
-
-  send(data) {
-    if (this.websocket && this.isConnected) {
+  async disconnect() {
+    if (this.currentTabId) {
       try {
-        this.websocket.send(JSON.stringify(data));
+        await sendMessage(`content:${this.currentTabId}`, "STANDALONE_DISCONNECT");
       } catch (error) {
-        console.error("Error sending WebSocket message:", error);
+        console.error("Error sending disconnect message:", error);
       }
     }
+    this.isConnected = false;
+    this.currentTabId = null;
+  }
+
+  async send(data) {
+    if (this.currentTabId && this.isConnected) {
+      try {
+        await sendMessage(`content:${this.currentTabId}`, "STANDALONE_SEND_DATA", data);
+      } catch (error) {
+        console.error("Error sending data to standalone:", error);
+      }
+    }
+  }
+
+  // Handle connection status updates from content script
+  updateConnectionStatus(status) {
+    this.isConnected = status.isConnected;
+    if (status.port) {
+      this.port = status.port;
+    }
+    console.log("Standalone connection status updated:", status);
   }
 
   async handleMessage(data) {
